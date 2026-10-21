@@ -19,3 +19,12 @@ class LoginReq(BaseModel):
 class LoginRes(BaseModel):
     email: str
 
+class MeRes(BaseModel):
+    display_name: str
+    display_kind: str
+
+class KakaoCallbackReq(BaseModel):
+    code: str | None = None
+    state: str | None = None
+    error: str | None = None
+

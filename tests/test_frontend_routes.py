@@ -7,7 +7,7 @@ client = TestClient(app)
 
 
 def test_frontend_routes_serve_vue_shell():
-    for path in ("/", "/register", "/login", "/posts", "/posts/new", "/posts/12"):
+    for path in ("/", "/register", "/login", "/login/kakao/callback", "/posts", "/posts/new", "/posts/12", "/learn", "/course/12"):
         response = client.get(path)
         assert response.status_code == 200
         assert '<div id="app"></div>' in response.text

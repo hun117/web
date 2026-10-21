@@ -7,10 +7,12 @@
 #작성용 응답  번호, 제목, 내용
 
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class ReadRes(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     idx:      int
     title:    str
     contents: str
@@ -21,6 +23,8 @@ class RegisterReq(BaseModel):
     contents: str
 
 class RegisterRes(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     idx   :   int
     title:    str
     contents: str
