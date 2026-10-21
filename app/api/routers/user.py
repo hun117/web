@@ -36,7 +36,7 @@ def _set_auth_cookie(response: Response, user_id: int) -> None:
         createToken(user_id),
         httponly=True,
         secure=settings.COOKIE_SECURE,
-        samesite="lax",
+        samesite=settings.COOKIE_SAMESITE,
         max_age=1800,
     )
 
@@ -65,7 +65,7 @@ def login(req: LoginReq, res: Response, db: Session = Depends(get_db)):
         createToken(user.idx),
         httponly=True,
         secure=settings.COOKIE_SECURE,
-        samesite="lax",
+        samesite=settings.COOKIE_SAMESITE,
         max_age=1800,
     )
     return ApiResponse(code=200, message="로그인되었습니다.", result=user)
@@ -85,7 +85,7 @@ def me(request: Request, response: Response, db: Session = Depends(get_db)):
             "EN_AT",
             httponly=True,
             secure=settings.COOKIE_SECURE,
-            samesite="lax",
+            samesite=settings.COOKIE_SAMESITE,
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -115,7 +115,7 @@ def kakao_oauth_state(response: Response):
         state,
         httponly=True,
         secure=settings.COOKIE_SECURE,
-        samesite="lax",
+        samesite=settings.COOKIE_SAMESITE,
         max_age=KAKAO_STATE_TTL_SECONDS,
     )
     return ApiResponse(
@@ -190,7 +190,7 @@ def kakao_oauth_callback(
         KAKAO_STATE_COOKIE,
         httponly=True,
         secure=settings.COOKIE_SECURE,
-        samesite="lax",
+        samesite=settings.COOKIE_SAMESITE,
     )
     if not req.state or not state_cookie or not secrets.compare_digest(req.state, state_cookie):
         return _kakao_error(response, status.HTTP_400_BAD_REQUEST, "invalid_state")

@@ -1,18 +1,23 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
-from pathlib import Path
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routers import board, courses, payments, user
+from app.core.config import settings
 from app.db.database import Base, engine
 from app.db.migrations import migrate_user_table
 from app.models import Board, Course, SocialAccount, User
 from sqlalchemy.orm import Session
 
 app = FastAPI(title="노트 API", version="0.1.0")
-STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.exception_handler(HTTPException)
@@ -64,22 +69,3 @@ def seed_courses():
 
 
 seed_courses()
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
-
-@app.get("/")
-def main():
-    return FileResponse(STATIC_DIR / "index.html")
-
-
-@app.get("/{frontend_path:path}")
-def frontend_routes(frontend_path: str):
-    """Serve the Vue shell for its client-side page routes on direct visits."""
-    route = frontend_path.strip("/")
-    if route in {"register", "login", "login/kakao/callback", "posts", "posts/new", "learn", "payment/complete"}:
-        return FileResponse(STATIC_DIR / "index.html")
-    if route.startswith("posts/") and route.removeprefix("posts/").isdigit():
-        return FileResponse(STATIC_DIR / "index.html")
-    if route.startswith("course/") and route.removeprefix("course/").isdigit():
-        return FileResponse(STATIC_DIR / "index.html")
-    raise HTTPException(status_code=404, detail="페이지를 찾을 수 없습니다.")

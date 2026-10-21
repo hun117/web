@@ -1,8 +1,17 @@
+function getApiBaseUrl() {
+  const configuredUrl = typeof __API_BASE_URL__ === 'undefined' ? '' : __API_BASE_URL__.trim()
+  if (configuredUrl) return configuredUrl.replace(/\/+$/, '')
+
+  throw new Error('The backend API origin is missing from the Vite configuration.')
+}
+
 export async function apiRequest(path, options = {}) {
-  const response = await fetch(path, {
-    credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+  const apiBaseUrl = getApiBaseUrl()
+  const apiPath = path.startsWith('/') ? path : `/${path}`
+  const response = await fetch(`${apiBaseUrl}${apiPath}`, {
     ...options,
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...options.headers },
   })
   const payload = await response.json().catch(() => null)
 
