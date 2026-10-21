@@ -1,5 +1,5 @@
 # Example for the Windows Nginx installation used by this project.
-# Copy the built ../static/* contents into C:/nginx-1.30.5/html before enabling it.
+# Copy the built dist/* contents into C:/nginx-1.30.5/html before enabling it.
 # API requests go directly from the browser to the URL configured in vite.config.js; this server does not proxy API routes.
 server {
     listen 80;
