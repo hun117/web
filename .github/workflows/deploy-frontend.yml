@@ -38,7 +38,13 @@ jobs:
 
       - name: Build frontend
         working-directory: frontend
+        env:
+          VITE_KAKAO_JAVASCRIPT_KEY: ${{ vars.VITE_KAKAO_JAVASCRIPT_KEY }}
         run: |
+          if [ -z "$VITE_KAKAO_JAVASCRIPT_KEY" ]; then
+            echo "::error::GitHub Actions variable VITE_KAKAO_JAVASCRIPT_KEY is missing."
+            exit 1
+          fi
           npm ci
           npm run build
 
