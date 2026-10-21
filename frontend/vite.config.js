@@ -16,8 +16,7 @@ export default defineConfig(({ command }) => ({
   base: '/',
   root: fileURLToPath(new URL('.', import.meta.url)),
   build: {
-    outDir: fileURLToPath(new URL('../static', import.meta.url)),
-    // static/ also contains uploaded stay images; preserve them during local builds.
-    emptyOutDir: false,
+    outDir: fileURLToPath(new URL('./dist', import.meta.url)),
+    emptyOutDir: true,
   },
 }))
