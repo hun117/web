@@ -1,10 +1,4 @@
-name: Deploy Backend
-
-# Repository variables: BACKEND_DEPLOY_HOST, BACKEND_DEPLOY_USER, BACKEND_SSH_PORT,
-# BACKEND_PROJECT_PATH, BACKEND_SERVICE_NAME.
-# Repository secret: BACKEND_DEPLOY_SSH_PASSWORD.
-# BACKEND_PROJECT_PATH is the remote project root; the service must allow
-# passwordless sudo for systemctl restart.
+name: Deploy backend
 
 on:
   push:
@@ -13,76 +7,46 @@ on:
     paths:
       - "app/**"
       - "requirements.txt"
+      - "scripts/deploy/deploy-backend.ps1"
+      - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: deploy-backend-${{ github.ref }}
+  group: deploy-backend
   cancel-in-progress: false
+
+env:
+  # 백엔드 Windows 서버 경로 (.env, app.db, .venv, certs 는 BACKEND_DIR 에 유지됨)
+  BACKEND_DIR: 'C:\backend'
+  STAGING_DIR: 'C:\Users\test\deploy\backend'
+  BACKEND_PORT: "443"
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out merged commit
+      - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Install SSH and rsync tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends rsync sshpass
+      - name: Upload backend files to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_BACKEND_HOST }}
+          port: ${{ secrets.DEPLOY_BACKEND_PORT }}
+          username: ${{ secrets.DEPLOY_BACKEND_USER }}
+          password: ${{ secrets.DEPLOY_BACKEND_PASSWORD }}
+          source: "app/**,requirements.txt,scripts/deploy/deploy-backend.ps1"
+          target: ${{ env.STAGING_DIR }}
 
-      - name: Upload app and restart backend service
-        env:
-          DEPLOY_HOST: ${{ vars.BACKEND_DEPLOY_HOST }}
-          DEPLOY_USER: ${{ vars.BACKEND_DEPLOY_USER }}
-          SSH_PORT: ${{ vars.BACKEND_SSH_PORT || '9114' }}
-          PROJECT_PATH: ${{ vars.BACKEND_PROJECT_PATH }}
-          SERVICE_NAME: ${{ vars.BACKEND_SERVICE_NAME }}
-          SSHPASS: ${{ secrets.BACKEND_DEPLOY_SSH_PASSWORD }}
-        run: |
-          set -euo pipefail
-
-          : "${DEPLOY_HOST:?Set the BACKEND_DEPLOY_HOST repository variable}"
-          : "${DEPLOY_USER:?Set the BACKEND_DEPLOY_USER repository variable}"
-          : "${PROJECT_PATH:?Set the BACKEND_PROJECT_PATH repository variable}"
-          : "${SERVICE_NAME:?Set the BACKEND_SERVICE_NAME repository variable}"
-          : "${SSHPASS:?Set the BACKEND_DEPLOY_SSH_PASSWORD repository secret}"
-          if ! [[ "$SSH_PORT" =~ ^[0-9]{1,5}$ ]] || (( SSH_PORT < 1 || SSH_PORT > 65535 )); then
-            echo "::error::SSH port must be between 1 and 65535"
-            exit 1
-          fi
-          [[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9.-]+$ ]] || { echo "::error::DEPLOY_HOST has an invalid format"; exit 1; }
-          [[ "$DEPLOY_USER" =~ ^[A-Za-z_][A-Za-z0-9_.-]*$ ]] || { echo "::error::DEPLOY_USER has an invalid format"; exit 1; }
-          [[ "$PROJECT_PATH" =~ ^/[A-Za-z0-9._/-]+$ && "$PROJECT_PATH" != "/" ]] || { echo "::error::BACKEND_PROJECT_PATH must be an absolute path without spaces"; exit 1; }
-          [[ "$SERVICE_NAME" =~ ^[A-Za-z0-9_.@:-]+$ ]] || { echo "::error::BACKEND_SERVICE_NAME has an invalid format"; exit 1; }
-          PROJECT_PATH="${PROJECT_PATH%/}"
-
-          ssh_options=(
-            -p "$SSH_PORT"
-            -o StrictHostKeyChecking=accept-new
-            -o ConnectTimeout=15
-            -o PreferredAuthentications=password,keyboard-interactive
-            -o PubkeyAuthentication=no
-          )
-
-          sshpass -e ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "mkdir -p '$PROJECT_PATH/app'"
-
-          rsync_ssh="sshpass -e ssh -p $SSH_PORT -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o PreferredAuthentications=password,keyboard-interactive -o PubkeyAuthentication=no"
-          sshpass -e rsync --archive --compress --delete \
-            --exclude='.env*' \
-            --exclude='__pycache__/' \
-            --exclude='*.py[cod]' \
-            --exclude='*.sqlite*' \
-            --exclude='*.db' \
-            --rsh="$rsync_ssh" \
-            app/ "$DEPLOY_USER@$DEPLOY_HOST:$PROJECT_PATH/app/"
-
-          sshpass -e rsync --archive --compress \
-            --rsh="$rsync_ssh" \
-            requirements.txt "$DEPLOY_USER@$DEPLOY_HOST:$PROJECT_PATH/requirements.txt"
-
-          sshpass -e ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd '$PROJECT_PATH' && python3 -m venv .venv && .venv/bin/pip install --disable-pip-version-check -r requirements.txt && sudo -n systemctl restart '$SERVICE_NAME'"
+      - name: Stop server, replace code, restart
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_BACKEND_HOST }}
+          port: ${{ secrets.DEPLOY_BACKEND_PORT }}
+          username: ${{ secrets.DEPLOY_BACKEND_USER }}
+          password: ${{ secrets.DEPLOY_BACKEND_PASSWORD }}
+          command_timeout: 10m
+          script: powershell -NoProfile -ExecutionPolicy Bypass -File "${{ env.STAGING_DIR }}\scripts\deploy\deploy-backend.ps1" -StagingDir "${{ env.STAGING_DIR }}" -BackendDir "${{ env.BACKEND_DIR }}" -Port ${{ env.BACKEND_PORT }}

@@ -1,10 +1,4 @@
-name: Deploy Frontend
-
-# Repository variables: FRONTEND_DEPLOY_HOST, FRONTEND_DEPLOY_USER,
-# FRONTEND_SSH_PORT, FRONTEND_WEB_ROOT, KAKAO_JAVASCRIPT_KEY (optional).
-# Repository secret: FRONTEND_DEPLOY_SSH_PASSWORD.
-# The Windows Nginx server serves the built files; browser API calls use the
-# production URL configured centrally in frontend/vite.config.js.
+name: Deploy frontend
 
 on:
   push:
@@ -12,69 +6,57 @@ on:
       - main
     paths:
       - "frontend/**"
+      - "scripts/deploy/deploy-frontend.ps1"
+      - ".github/workflows/deploy-frontend.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: deploy-frontend-${{ github.ref }}
+  group: deploy-frontend
   cancel-in-progress: false
+
+env:
+  # 프론트엔드 Windows 서버 경로
+  HTML_DIR: 'C:\nginx-1.30.5\html'
+  STAGING_DIR: 'C:\Users\test\deploy\frontend'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out merged commit
+      - name: Check out repository
         uses: actions/checkout@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install frontend dependencies
-        run: npm ci --no-audit --no-fund
-        working-directory: frontend
-
       - name: Build frontend
-        env:
-          VITE_KAKAO_JAVASCRIPT_KEY: ${{ vars.KAKAO_JAVASCRIPT_KEY }}
-        run: npm run build
         working-directory: frontend
-
-      - name: Install SSH password client
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends sshpass
+          npm ci
+          npm run build
 
-      - name: Copy built files to Windows Nginx
-        env:
-          DEPLOY_HOST: ${{ vars.FRONTEND_DEPLOY_HOST }}
-          DEPLOY_USER: ${{ vars.FRONTEND_DEPLOY_USER }}
-          SSH_PORT: ${{ vars.FRONTEND_SSH_PORT || '9014' }}
-          WEB_ROOT: ${{ vars.FRONTEND_WEB_ROOT || 'C:/nginx-1.30.5/html' }}
-          SSHPASS: ${{ secrets.FRONTEND_DEPLOY_SSH_PASSWORD }}
-        run: |
-          set -euo pipefail
+      - name: Upload built files to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_FRONTEND_HOST }}
+          port: ${{ secrets.DEPLOY_FRONTEND_PORT }}
+          username: ${{ secrets.DEPLOY_FRONTEND_USER }}
+          password: ${{ secrets.DEPLOY_FRONTEND_PASSWORD }}
+          source: "frontend/dist/**,scripts/deploy/deploy-frontend.ps1"
+          target: ${{ env.STAGING_DIR }}
 
-          : "${DEPLOY_HOST:?Set the FRONTEND_DEPLOY_HOST repository variable}"
-          : "${DEPLOY_USER:?Set the FRONTEND_DEPLOY_USER repository variable}"
-          : "${WEB_ROOT:?Set the FRONTEND_WEB_ROOT repository variable}"
-          : "${SSHPASS:?Set the FRONTEND_DEPLOY_SSH_PASSWORD repository secret}"
-          if ! [[ "$SSH_PORT" =~ ^[0-9]{1,5}$ ]] || (( SSH_PORT < 1 || SSH_PORT > 65535 )); then
-            echo "::error::SSH port must be between 1 and 65535"
-            exit 1
-          fi
-          [[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9.-]+$ ]] || { echo "::error::FRONTEND_DEPLOY_HOST has an invalid format"; exit 1; }
-          [[ "$DEPLOY_USER" =~ ^[A-Za-z_][A-Za-z0-9_.-]*$ ]] || { echo "::error::FRONTEND_DEPLOY_USER has an invalid format"; exit 1; }
-          [[ "$WEB_ROOT" =~ ^[A-Za-z]:/[A-Za-z0-9._/-]+$ ]] || { echo "::error::FRONTEND_WEB_ROOT must be a Windows drive path without spaces"; exit 1; }
-          WEB_ROOT="${WEB_ROOT%/}"
-
-          sshpass -e scp -P "$SSH_PORT" \
-            -o StrictHostKeyChecking=accept-new \
-            -o ConnectTimeout=15 \
-            -o PreferredAuthentications=password,keyboard-interactive \
-            -o PubkeyAuthentication=no \
-            -r static/* "$DEPLOY_USER@$DEPLOY_HOST:$WEB_ROOT/"
+      - name: Publish to Nginx html folder
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_FRONTEND_HOST }}
+          port: ${{ secrets.DEPLOY_FRONTEND_PORT }}
+          username: ${{ secrets.DEPLOY_FRONTEND_USER }}
+          password: ${{ secrets.DEPLOY_FRONTEND_PASSWORD }}
+          script: powershell -NoProfile -ExecutionPolicy Bypass -File "${{ env.STAGING_DIR }}\scripts\deploy\deploy-frontend.ps1" -StagingDir "${{ env.STAGING_DIR }}\frontend\dist" -HtmlDir "${{ env.HTML_DIR }}"
