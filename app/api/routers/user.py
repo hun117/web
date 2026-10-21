@@ -243,3 +243,7 @@ def kakao_oauth_callback(
         message="Kakao login successful.",
         result={"display_name": user.name, "display_kind": "nickname"},
     )
+
+@router.get("/test")
+def test():
+    print("test")
