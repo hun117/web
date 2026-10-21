@@ -13,7 +13,8 @@ class Settings(BaseSettings):
     DATABASE_URL :str = "sqlite:///db.sqlite"
     COOKIE_SECURE: bool = False
     COOKIE_SAMESITE: Literal["lax", "strict", "none"] = "lax"
-    CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
+    COOKIE_DOMAIN: str = ".pepepe.p-e.kr"
+    CORS_ORIGINS: str = "https://www.pepepe.p-e.kr,http://www.pepepe.p-e.kr,http://localhost:5173,http://127.0.0.1:5173"
     KAKAO_REST_API_KEY: str = ""
     KAKAO_CLIENT_SECRET: str | None = None
     KAKAO_REDIRECT_URI: str = ""

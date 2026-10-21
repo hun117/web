@@ -8,7 +8,7 @@ server {
     root C:/nginx-1.30.5/html;
     index index.html;
 
-    # Vite builds with base /static/, while the build output is deployed into the document root.
+    # Vite JS/CSS assets use /assets/ from the document root. API course image URLs still use /static/courses/.
     location ^~ /static/ {
         alias C:/nginx-1.30.5/html/;
     }

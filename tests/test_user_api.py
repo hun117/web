@@ -96,8 +96,9 @@ def user_client():
         engine.dispose()
 
 
-def test_password_login_token_subject_is_the_local_user_id(user_client):
+def test_password_login_token_subject_is_the_local_user_id(user_client, monkeypatch):
     client, session_local = user_client
+    monkeypatch.setattr(settings, "COOKIE_DOMAIN", ".pepepe.p-e.kr")
     with session_local() as db:
         user = User(email="reader@example.com", password="secret", name="Reader")
         db.add(user)
@@ -106,11 +107,13 @@ def test_password_login_token_subject_is_the_local_user_id(user_client):
         user_id = user.idx
 
     response = client.post(
-        "/user/login",
+        "https://api.pepepe.p-e.kr/user/login",
         json={"email": "reader@example.com", "password": "secret"},
     )
 
     assert response.status_code == 200
+    assert "domain=.pepepe.p-e.kr" in response.headers["set-cookie"].lower()
+    assert "secure" in response.headers["set-cookie"].lower()
     token = response.cookies["EN_AT"]
     payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
     assert payload["sub"] == str(user_id)
@@ -154,8 +157,9 @@ def test_me_returns_email_for_password_user_and_nickname_for_social_user(user_cl
 
 
 @pytest.mark.parametrize("token_kind", ["missing", "malformed", "expired", "deleted_user"])
-def test_me_rejects_invalid_sessions_and_clears_cookie(user_client, token_kind):
+def test_me_rejects_invalid_sessions_and_clears_cookie(user_client, token_kind, monkeypatch):
     client, session_local = user_client
+    monkeypatch.setattr(settings, "COOKIE_DOMAIN", ".pepepe.p-e.kr")
     if token_kind == "missing":
         token = None
     elif token_kind == "malformed":
@@ -174,13 +178,15 @@ def test_me_rejects_invalid_sessions_and_clears_cookie(user_client, token_kind):
         )
 
     if token is not None:
-        client.cookies.set("EN_AT", token)
-    response = client.get("/user/me")
+        client.cookies.set("EN_AT", token, domain="api.pepepe.p-e.kr")
+    response = client.get("https://api.pepepe.p-e.kr/user/me")
 
     assert response.status_code == 401
     set_cookie = response.headers.get("set-cookie", "").lower()
     assert set_cookie.startswith('en_at="";')
     assert "max-age=0" in set_cookie
+    assert "domain=.pepepe.p-e.kr" in set_cookie
+    assert "secure" in set_cookie
 
 
 def test_existing_signup_and_password_login_contract_stays_available(user_client):

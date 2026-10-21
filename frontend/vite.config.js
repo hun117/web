@@ -4,7 +4,7 @@ import { fileURLToPath, URL } from 'node:url'
 
 const API_BASE_URLS = {
   development: 'http://localhost:8000',
-  production: 'http://100.100.100.20:8000',
+  production: 'https://api.pepepe.p-e.kr',
 }
 
 export default defineConfig(({ command }) => ({
@@ -13,10 +13,11 @@ export default defineConfig(({ command }) => ({
     __VITE_SERVE__: JSON.stringify(command === 'serve'),
     __API_BASE_URL__: JSON.stringify(command === 'serve' ? API_BASE_URLS.development : API_BASE_URLS.production),
   },
-  base: command === 'serve' ? '/' : '/static/',
+  base: '/',
   root: fileURLToPath(new URL('.', import.meta.url)),
   build: {
     outDir: fileURLToPath(new URL('../static', import.meta.url)),
-    emptyOutDir: true,
+    // static/ also contains uploaded stay images; preserve them during local builds.
+    emptyOutDir: false,
   },
 }))

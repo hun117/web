@@ -21,6 +21,21 @@ KAKAO_STATE_COOKIE = "KAKAO_OAUTH_STATE"
 KAKAO_STATE_TTL_SECONDS = 300
 
 
+def _cookie_domain(request: Request) -> str | None:
+    domain = settings.COOKIE_DOMAIN.strip()
+    hostname = (request.url.hostname or "").lower()
+    normalized_domain = domain.lstrip(".").lower()
+    if normalized_domain and (
+        hostname == normalized_domain or hostname.endswith(f".{normalized_domain}")
+    ):
+        return domain
+    return None
+
+
+def _cookie_secure(request: Request) -> bool:
+    return settings.COOKIE_SECURE or request.url.scheme == "https"
+
+
 def _kakao_is_configured() -> bool:
     return bool(settings.KAKAO_REST_API_KEY and settings.KAKAO_REDIRECT_URI)
 
@@ -30,13 +45,14 @@ def _kakao_error(response: Response, status_code: int, code: str):
     return ApiResponse(code=status_code, message=code, result=None)
 
 
-def _set_auth_cookie(response: Response, user_id: int) -> None:
+def _set_auth_cookie(response: Response, user_id: int, request: Request) -> None:
     response.set_cookie(
         "EN_AT",
         createToken(user_id),
         httponly=True,
-        secure=settings.COOKIE_SECURE,
+        secure=_cookie_secure(request),
         samesite=settings.COOKIE_SAMESITE,
+        domain=_cookie_domain(request),
         max_age=1800,
     )
 
@@ -55,7 +71,7 @@ def signup(req: SignUpReq, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=ApiResponse[LoginRes])
-def login(req: LoginReq, res: Response, db: Session = Depends(get_db)):
+def login(req: LoginReq, res: Response, request: Request, db: Session = Depends(get_db)):
     user = db.scalar(select(User).where(User.email == req.email))
     if not user or user.password != req.password:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
@@ -64,8 +80,9 @@ def login(req: LoginReq, res: Response, db: Session = Depends(get_db)):
         "EN_AT",
         createToken(user.idx),
         httponly=True,
-        secure=settings.COOKIE_SECURE,
+        secure=_cookie_secure(request),
         samesite=settings.COOKIE_SAMESITE,
+        domain=_cookie_domain(request),
         max_age=1800,
     )
     return ApiResponse(code=200, message="로그인되었습니다.", result=user)
@@ -84,8 +101,9 @@ def me(request: Request, response: Response, db: Session = Depends(get_db)):
         cleared_cookie.delete_cookie(
             "EN_AT",
             httponly=True,
-            secure=settings.COOKIE_SECURE,
+            secure=_cookie_secure(request),
             samesite=settings.COOKIE_SAMESITE,
+            domain=_cookie_domain(request),
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -102,7 +120,7 @@ def me(request: Request, response: Response, db: Session = Depends(get_db)):
     )
 
 @router.get("/oauth/kakao/state")
-def kakao_oauth_state(response: Response):
+def kakao_oauth_state(response: Response, request: Request):
     if not _kakao_is_configured():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -114,8 +132,9 @@ def kakao_oauth_state(response: Response):
         KAKAO_STATE_COOKIE,
         state,
         httponly=True,
-        secure=settings.COOKIE_SECURE,
+        secure=_cookie_secure(request),
         samesite=settings.COOKIE_SAMESITE,
+        domain=_cookie_domain(request),
         max_age=KAKAO_STATE_TTL_SECONDS,
     )
     return ApiResponse(
@@ -189,8 +208,9 @@ def kakao_oauth_callback(
     response.delete_cookie(
         KAKAO_STATE_COOKIE,
         httponly=True,
-        secure=settings.COOKIE_SECURE,
+        secure=_cookie_secure(request),
         samesite=settings.COOKIE_SAMESITE,
+        domain=_cookie_domain(request),
     )
     if not req.state or not state_cookie or not secrets.compare_digest(req.state, state_cookie):
         return _kakao_error(response, status.HTTP_400_BAD_REQUEST, "invalid_state")
@@ -217,7 +237,7 @@ def kakao_oauth_callback(
         )
         return _kakao_error(response, status.HTTP_502_BAD_GATEWAY, "provider_error")
 
-    _set_auth_cookie(response, user.idx)
+    _set_auth_cookie(response, user.idx, request)
     return ApiResponse(
         code=200,
         message="Kakao login successful.",
